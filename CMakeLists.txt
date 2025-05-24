@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.20.0)
 
 set(MR_CMAKE_MODULES "${CMAKE_SOURCE_DIR}/cmake/Modules")
 
