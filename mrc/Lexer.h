@@ -1,13 +1,13 @@
 #ifndef MR_MRC_LEXER_H
 #define MR_MRC_LEXER_H
 
+#ifdef __cplusplus
+
+#include <filesystem>
 #include <fstream>
 #include <iosfwd>
 #include <list>
 #include <memory>
-#ifdef __cplusplus
-
-#include <filesystem>
 #include <string>
 
 namespace fs = std::filesystem;
@@ -23,20 +23,20 @@ enum class TokenKind {
   Amp,
   Equal,
   Exclam,
-	Tilde,
-	Caret,
+  Tilde,
+  Caret,
 
-	LParen,
-	RParen,
-	LBrak,
-	RBrak,
-	LBrace,
-	RBrace,
+  LParen,
+  RParen,
+  LBrak,
+  RBrak,
+  LBrace,
+  RBrace,
 
-	Dot,
-	Comma,
-	Colon,
-	Semicolon,
+  Dot,
+  Comma,
+  Colon,
+  Semicolon,
 
   PlusPlus,
   MinusMinus,
@@ -63,25 +63,33 @@ enum class TokenKind {
   GreaterGreaterEqual,
   LesserLesserEqual,
 
-	Arrow,
+  Arrow,
   EqualBig,
+
+	Numeric,
+};
+
+enum class LexerErrorCode {
+  NoError = 0,
+  InvalidHexNumericLiteral,
+	IncompleteExponentLiteral,
 };
 
 class Token {
 public:
   Token(TokenKind kind);
-  Token(TokenKind kind, std::wstring literal);
+  Token(TokenKind kind, std::string literal);
 
   std::string to_str() const;
 
 private:
   const TokenKind kind;
-  const std::wstring literal;
+  const std::string literal;
 };
 
 class Lexer {
 public:
-  Lexer(std::wifstream file);
+  Lexer(std::ifstream file);
   ~Lexer();
 
   void lex();
@@ -89,9 +97,12 @@ public:
   static std::unique_ptr<Lexer> from_file(fs::path path);
 
 private:
-  std::wifstream _fd;
-  std::wstreampos _fsize;
+  std::ifstream _fd;
+  std::streampos _fsize;
   std::list<Token> tokens;
+  LexerErrorCode errorCode = LexerErrorCode::NoError;
+
+  std::string lex_numeric(uint32_t start);
   void skip_trivia();
   bool eof() const;
 };

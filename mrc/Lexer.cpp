@@ -1,4 +1,3 @@
-
 #include "Lexer.h"
 #include "LexerUtil.h"
 #include <cstdint>
@@ -7,10 +6,11 @@
 #include <ios>
 #include <iostream>
 #include <memory>
+#include <sstream>
 #include <string>
 
 Token::Token(TokenKind kind) : kind(kind), literal({}) {};
-Token::Token(TokenKind kind, std::wstring literal)
+Token::Token(TokenKind kind, std::string literal)
     : kind(kind), literal(literal) {};
 
 #define CASE(KIND, STR)                                                        \
@@ -19,32 +19,66 @@ Token::Token(TokenKind kind, std::wstring literal)
 
 std::string Token::to_str() const {
   switch (this->kind) {
-    CASE(Plus, "<+>");
-    CASE(Minus, "<->");
-    CASE(Asterisk, "<\u00D7>");
-    CASE(Slash, "<\u00F7>");
-    CASE(Percent, "<%>");
-    CASE(Amp, "<&>");
-    CASE(Pipe, "<|>");
-    CASE(Equal, "<=>");
-    CASE(Exclam, "<!>");
+    CASE(Plus, "<'+'>");
+    CASE(Minus, "<'-'>");
+    CASE(Asterisk, "<'\u00D7'>");
+    CASE(Slash, "<'\u00F7'>");
+    CASE(Percent, "<'%'>");
+    CASE(Amp, "<'&'>");
+    CASE(Pipe, "<'|'>");
+    CASE(Equal, "<'='>");
+    CASE(Exclam, "<'!'>");
+    CASE(Tilde, "<'~'>");
+    CASE(Caret, "<'^'>");
 
-    CASE(PlusPlus, "<++>");
-    CASE(MinusMinus, "<-->");
-    CASE(AmpAmp, "<\u2227>");
-    CASE(PipePipe, "<\u2228>");
+    CASE(LParen, "<'('>");
+    CASE(RParen, "<')'>");
+    CASE(LBrak, "<'['>");
+    CASE(RBrak, "<']'>");
+    CASE(LBrace, "<'{'>");
+    CASE(RBrace, "<'}'>");
 
-    CASE(PlusEqual, "<=,+>");
-    CASE(MinusEqual, "<=,->");
-    CASE(AsteriskEqual, "<=,\u00D7>");
-    CASE(SlashEqual, "<=,\u00F7>");
-    CASE(PercentEqual, "<=,%>");
+    CASE(Dot, "<'.'>");
+    CASE(Comma, "<','>");
+    CASE(Colon, "<':'>");
+    CASE(Semicolon, "<';'>");
 
-    CASE(EqualEqual, "<\u2261>");
-    CASE(ExclamEqual, "<\u2260>");
+    CASE(PlusPlus, "<'++'>");
+    CASE(MinusMinus, "<'--'>");
+    CASE(AmpAmp, "<'\u2227'>");
+    CASE(PipePipe, "<'\u2228'>");
 
-    CASE(EqualBig, "<\u227B>");
+    CASE(Lesser, "<'<'>");
+    CASE(LesserEqual, "<'\u2264'>");
+    CASE(LesserLesser, "<'\u226A'>");
+    CASE(Greater, "<'>'>");
+    CASE(GreaterEqual, "<'\u2265'>");
+    CASE(GreaterGreater, "<'\u226B'>");
+
+    CASE(PlusEqual, "<=,'+'>");
+    CASE(MinusEqual, "<=,'-'>");
+    CASE(AsteriskEqual, "<=,'\u00D7'>");
+    CASE(SlashEqual, "<=,'\u00F7'>");
+    CASE(PercentEqual, "<=,'%'>");
+    CASE(AmpEqual, "<=,'&'>");
+    CASE(PipeEqual, "<=,'|'>");
+    CASE(EqualEqual, "<'\u2261'>");
+    CASE(ExclamEqual, "<'\u2260'>");
+    CASE(LesserLesserEqual, "<=,'<<'>");
+    CASE(GreaterGreaterEqual, "<=,'>>'>");
+
+    CASE(Arrow, "<'\u2192'>");
+    CASE(EqualBig, "<'\u21D2'>");
+
     CASE(Eof, "<eof>");
+
+  case TokenKind::Numeric: {
+    std::string rv = "<num:";
+    rv.append(this->literal);
+    rv.push_back('>');
+    return rv;
+  }
+
   default:
     return std::string(u8"");
   }
@@ -52,10 +86,10 @@ std::string Token::to_str() const {
 #undef CASE
 
 std::unique_ptr<Lexer> Lexer::from_file(fs::path path) {
-  return std::make_unique<Lexer>(std::wifstream(path));
+  return std::make_unique<Lexer>(std::ifstream(path));
 }
 
-Lexer::Lexer(std::wifstream file) {
+Lexer::Lexer(std::ifstream file) {
   this->_fd = std::move(file);
   if (!this->_fd.is_open()) {
     std::cerr << "Error opening the file!";
@@ -81,12 +115,14 @@ bool Lexer::eof() const { return this->_fd.eof(); }
 void Lexer::lex() {
   this->tokens = std::list<Token>();
 
-  std::wstreampos start = this->_fd.tellg();
+  std::streampos start = this->_fd.tellg();
 
   while (!eof()) {
     this->skip_trivia();
 
-    switch (this->_fd.get()) {
+    uint32_t ch = this->_fd.get();
+
+    switch (ch) {
     case '(': {
       this->tokens.push_back(Token(TokenKind::LParen));
       break;
@@ -251,6 +287,8 @@ void Lexer::lex() {
           break;
         }
       }
+      this->tokens.push_back(Token(TokenKind::Lesser));
+      break;
     }
     case '>': {
       const uint32_t next = this->_fd.peek();
@@ -275,6 +313,12 @@ void Lexer::lex() {
       this->tokens.push_back(Token(TokenKind::Eof));
       goto finalize;
       break;
+    default: {
+      if (LexerUtil::is_digit(ch)) {
+        std::string literal = lex_numeric(ch);
+        this->tokens.push_back(Token(TokenKind::Numeric, literal));
+      }
+    }
     }
   }
 finalize:
@@ -316,4 +360,55 @@ void Lexer::skip_trivia() {
       break;
     }
   }
+}
+
+std::string Lexer::lex_numeric(uint32_t start) {
+  std::stringstream literal;
+  literal.put(start);
+
+  if (start == '0') {
+    if (this->_fd.peek() == 'x') {
+      literal.put(this->_fd.get()); // literal has '0x' until now
+
+      if (!eof() && LexerUtil::is_hex_digit(this->_fd.peek())) {
+        literal.put(this->_fd.get());
+
+        while (!eof() && LexerUtil::is_hex_digit(this->_fd.peek())) {
+          literal.put(this->_fd.get());
+        }
+      } else {
+        this->errorCode = LexerErrorCode::InvalidHexNumericLiteral;
+        return literal.str();
+      }
+    }
+  }
+
+  while (!eof() && LexerUtil::is_digit(this->_fd.peek())) {
+    literal.put(this->_fd.get());
+  }
+
+  if (this->_fd.peek() == '.') {
+    literal.put(this->_fd.get());
+
+    while (!eof() && LexerUtil::is_digit(this->_fd.peek())) {
+      literal.put(this->_fd.get());
+    }
+
+    if (this->_fd.peek() == 'e' || this->_fd.peek() == 'E') {
+      literal.put(this->_fd.get());
+      if (this->_fd.peek() == '+' || this->_fd.peek() == '-') {
+        literal.put(this->_fd.get());
+
+        if (!LexerUtil::is_digit(this->_fd.peek())) {
+          this->errorCode = LexerErrorCode::IncompleteExponentLiteral;
+        }
+      }
+
+      while (!eof() && LexerUtil::is_digit(this->_fd.peek())) {
+        literal.put(this->_fd.get());
+      }
+    }
+  }
+
+  return literal.str();
 }
