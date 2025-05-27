@@ -66,13 +66,18 @@ enum class TokenKind {
   Arrow,
   EqualBig,
 
-	Numeric,
+  Numeric,
+  String,
 };
 
 enum class LexerErrorCode {
   NoError = 0,
   InvalidHexNumericLiteral,
-	IncompleteExponentLiteral,
+  IncompleteExponentLiteral,
+
+  UnterminatedString,
+  UnterminatedHexByte,
+  UnterminatedUnicodeCharacter,
 };
 
 class Token {
@@ -103,6 +108,7 @@ private:
   LexerErrorCode errorCode = LexerErrorCode::NoError;
 
   std::string lex_numeric(uint32_t start);
+  std::string lex_string(uint32_t start);
   void skip_trivia();
   bool eof() const;
 };

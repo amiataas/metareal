@@ -1,11 +1,14 @@
 #include "Lexer.h"
 #include "LexerUtil.h"
+#include "StringUtil.h"
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <ios>
 #include <iostream>
 #include <memory>
+#include <ostream>
 #include <sstream>
 #include <string>
 
@@ -75,6 +78,14 @@ std::string Token::to_str() const {
   case TokenKind::Numeric: {
     std::string rv = "<num:";
     rv.append(this->literal);
+    rv.push_back('>');
+    return rv;
+  }
+
+  case TokenKind::String: {
+    std::string rv = "<str:";
+    const std::string escaped = StringUtil::escape_string(this->literal);
+    rv.append(escaped);
     rv.push_back('>');
     return rv;
   }
@@ -317,6 +328,9 @@ void Lexer::lex() {
       if (LexerUtil::is_digit(ch)) {
         std::string literal = lex_numeric(ch);
         this->tokens.push_back(Token(TokenKind::Numeric, literal));
+      } else if (ch == '\'' || ch == '`' || ch == '"') {
+        std::string literal = lex_string(ch);
+        this->tokens.push_back(Token(TokenKind::String, literal));
       }
     }
     }
@@ -344,6 +358,7 @@ void Lexer::skip_trivia() {
         this->_fd.get();
         while (!eof() && !LexerUtil::is_linefeed(this->_fd.get())) {
         }
+        this->_fd.seekg(-1, std::ios::cur);
         continue;
       } else if (current == '*') {
         while (!eof()) {
@@ -355,7 +370,7 @@ void Lexer::skip_trivia() {
         }
       }
       this->_fd.seekg(-1, std::ios::cur);
-      break;
+      continue;
     } else {
       break;
     }
@@ -407,6 +422,113 @@ std::string Lexer::lex_numeric(uint32_t start) {
       while (!eof() && LexerUtil::is_digit(this->_fd.peek())) {
         literal.put(this->_fd.get());
       }
+    }
+  }
+
+  return literal.str();
+}
+
+std::string Lexer::lex_string(uint32_t start) {
+  std::stringstream literal;
+  uint32_t current = this->_fd.peek();
+
+  while ((current = this->_fd.get()) != start) {
+    if (eof() || LexerUtil::is_linefeed(current)) {
+      this->errorCode = LexerErrorCode::UnterminatedString;
+      break;
+    }
+
+    // Handle Escape Sequences
+    if ('\\' == current) {
+      current = this->_fd.get();
+      switch (current) {
+      case '\\':
+        literal.put('\\');
+        break;
+      case '\'':
+        if ('\'' == start) {
+          literal.put(0x27); // '
+        } else {
+          literal.put(0x5C); // /
+          literal.put(0x27); // '
+        }
+        break;
+      case '"':
+        if ('"' == start) {
+          literal.put(0x22); // "
+        } else {
+          literal.put(0x5C); // /
+          literal.put(0x22); // "
+        }
+        break;
+      case 'n':
+        literal.put(0x0A);
+        break;
+      case 'r':
+        literal.put(0x0D);
+        break;
+      case 't':
+        literal.put(0x09);
+        break;
+      case 'b':
+        literal.put(0x08);
+        break;
+      case 'f':
+        literal.put(0x0C);
+        break;
+      case 'a':
+        literal.put(0x07);
+        break;
+      case 'v':
+        literal.put(0x0B);
+        break;
+      case '0':
+        literal.put(0x00);
+        break;
+      case 'x': {
+        std::stringstream value;
+        for (int i = 0; i < 2; ++i) {
+          current = this->_fd.get();
+          if (LexerUtil::is_hex_digit(current)) {
+            value.put(current);
+          } else {
+            this->errorCode = LexerErrorCode::UnterminatedHexByte;
+            return literal.str();
+          }
+        }
+        uint8_t v = static_cast<uint8_t>(std::stoi(value.str(), nullptr, 16));
+        literal.put(v);
+        break;
+      }
+      case 'u': {
+        std::stringstream value;
+        for (int i = 0; i < 4; ++i) {
+          current = this->_fd.get();
+          if (LexerUtil::is_hex_digit(current)) {
+            value.put(current);
+          } else {
+            this->errorCode = LexerErrorCode::UnterminatedUnicodeCharacter;
+            return literal.str();
+          }
+        }
+        uint32_t v = static_cast<uint32_t>(std::stol(value.str(), nullptr, 16));
+        literal.put(v);
+        break;
+      }
+      default:
+        if (LexerUtil::is_whitespace(current)) {
+          skip_trivia();
+          if (!LexerUtil::is_linefeed(this->_fd.get())) {
+            this->errorCode = LexerErrorCode::UnterminatedString;
+            return literal.str();
+          }
+        }
+      }
+      continue;
+    }
+
+    if (current != start) {
+      literal.put(current);
     }
   }
 
