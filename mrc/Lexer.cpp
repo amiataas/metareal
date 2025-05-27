@@ -3,7 +3,6 @@
 #include "StringUtil.h"
 #include <cstdint>
 #include <cstdio>
-#include <cstdlib>
 #include <fstream>
 #include <ios>
 #include <iostream>
@@ -497,7 +496,7 @@ std::string Lexer::lex_string(uint32_t start) {
           }
         }
         uint8_t v = static_cast<uint8_t>(std::stoi(value.str(), nullptr, 16));
-        literal.put(v);
+        literal << StringUtil::encode_utf8(v);
         break;
       }
       case 'u': {
@@ -511,8 +510,9 @@ std::string Lexer::lex_string(uint32_t start) {
             return literal.str();
           }
         }
-        uint32_t v = static_cast<uint32_t>(std::stol(value.str(), nullptr, 16));
-        literal.put(v);
+        uint32_t v =
+            static_cast<uint32_t>(std::stoul(value.str(), nullptr, 16));
+        literal << StringUtil::encode_utf8(v);
         break;
       }
       default:
