@@ -7,9 +7,14 @@
 #include <ios>
 #include <iostream>
 #include <memory>
-#include <ostream>
 #include <sstream>
 #include <string>
+#include <unordered_map>
+
+const std::unordered_map<std::string, TokenKind> Lexer::Keywords = {
+    {"true", TokenKind::True},
+    {"false", TokenKind::False},
+};
 
 Token::Token(TokenKind kind) : kind(kind), literal({}) {};
 Token::Token(TokenKind kind, std::string literal)
@@ -74,6 +79,9 @@ std::string Token::to_str() const {
 
     CASE(Eof, "<eof>");
 
+    CASE(True, "<true>");
+    CASE(False, "<false>");
+
   case TokenKind::Numeric: {
     std::string rv = "<num:";
     rv.append(this->literal);
@@ -85,6 +93,13 @@ std::string Token::to_str() const {
     std::string rv = "<str:";
     const std::string escaped = StringUtil::escape_string(this->literal);
     rv.append(escaped);
+    rv.push_back('>');
+    return rv;
+  }
+
+  case TokenKind::Identifier: {
+    std::string rv = "<id:";
+    rv.append(this->literal);
     rv.push_back('>');
     return rv;
   }
@@ -324,20 +339,46 @@ void Lexer::lex() {
       goto finalize;
       break;
     default: {
+      ch = StringUtil::utf8_from_file(this->_fd, ch);
+
       if (LexerUtil::is_digit(ch)) {
         std::string literal = lex_numeric(ch);
         this->tokens.push_back(Token(TokenKind::Numeric, literal));
       } else if (ch == '\'' || ch == '`' || ch == '"') {
         std::string literal = lex_string(ch);
         this->tokens.push_back(Token(TokenKind::String, literal));
+      } else {
+        if (ch == '$' || ch == '_' || LexerUtil::is_unicode_char(ch)) {
+          std::stringstream idorkey;
+          idorkey << StringUtil::encode_utf8(ch);
+          while (!eof()) {
+            ch = this->_fd.get();
+            ch = StringUtil::utf8_from_file(this->_fd, ch);
+            if ((ch == '$' || ch == '_' || LexerUtil::is_unicode_char(ch) ||
+                 LexerUtil::is_unicode_digit(ch) ||
+                 LexerUtil::is_unicode_punc(ch))) {
+              idorkey << StringUtil::encode_utf8(ch);
+            } else {
+              this->_fd.seekg(-1, std::ios::cur);
+              break;
+            }
+          }
+          const std::string idorkeystr = idorkey.str();
+          if (auto search = Lexer::Keywords.find(idorkeystr);
+              search != Lexer::Keywords.end()) {
+            this->tokens.push_back(Token(search->second));
+          } else {
+            this->tokens.push_back(Token(TokenKind::Identifier, idorkeystr));
+          }
+        }
       }
     }
     }
   }
 finalize:
-
+  // return;
   for (auto v : this->tokens)
-    std::cout << v.to_str() << " ";
+    std::cout << v.to_str() << "\n";
   std::cout << "\n";
 }
 

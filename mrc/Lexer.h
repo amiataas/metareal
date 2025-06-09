@@ -9,6 +9,7 @@
 #include <list>
 #include <memory>
 #include <string>
+#include <unordered_map>
 
 namespace fs = std::filesystem;
 
@@ -68,6 +69,10 @@ enum class TokenKind {
 
   Numeric,
   String,
+	Identifier,
+
+  True,
+  False,
 };
 
 enum class LexerErrorCode {
@@ -111,6 +116,8 @@ private:
   std::string lex_string(uint32_t start);
   void skip_trivia();
   bool eof() const;
+
+  const static std::unordered_map<std::string, TokenKind> Keywords;
 };
 
 #endif
