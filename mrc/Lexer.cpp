@@ -14,6 +14,9 @@
 const std::unordered_map<std::string, TokenKind> Lexer::Keywords = {
     {"true", TokenKind::True},
     {"false", TokenKind::False},
+		{"let", TokenKind::Let},
+		{"type", TokenKind::Type},
+		{"func", TokenKind::Func},
 };
 
 Token::Token(TokenKind kind) : kind(kind), literal({}) {};
@@ -110,6 +113,10 @@ std::string Token::to_str() const {
 }
 #undef CASE
 
+llvm::StringRef Token::to_strref() const {
+	return this->literal;
+}
+
 std::unique_ptr<Lexer> Lexer::from_file(fs::path path) {
   return std::make_unique<Lexer>(std::ifstream(path));
 }
@@ -137,7 +144,7 @@ bool Lexer::eof() const { return this->_fd.eof(); }
   this->tokens.push_back(Token(TokenKind::TOKEN));                             \
   this->_fd.seekg(1, std::ios::cur)
 
-void Lexer::lex() {
+std::list<Token> Lexer::lex() {
   this->tokens = std::list<Token>();
 
   std::streampos start = this->_fd.tellg();
@@ -376,10 +383,7 @@ void Lexer::lex() {
     }
   }
 finalize:
-  // return;
-  for (auto v : this->tokens)
-    std::cout << v.to_str() << "\n";
-  std::cout << "\n";
+  return this->tokens;
 }
 
 #undef ADVANCE

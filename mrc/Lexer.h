@@ -1,6 +1,7 @@
 #ifndef MR_MRC_LEXER_H
 #define MR_MRC_LEXER_H
 
+#include "llvm/ADT/StringRef.h"
 #ifdef __cplusplus
 
 #include <filesystem>
@@ -69,10 +70,13 @@ enum class TokenKind {
 
   Numeric,
   String,
-	Identifier,
+  Identifier,
 
   True,
   False,
+  Let,
+  Type,
+  Func,
 };
 
 enum class LexerErrorCode {
@@ -91,10 +95,11 @@ public:
   Token(TokenKind kind, std::string literal);
 
   std::string to_str() const;
-
-private:
+	llvm::StringRef to_strref() const;
   const TokenKind kind;
   const std::string literal;
+
+private:
 };
 
 class Lexer {
@@ -102,7 +107,7 @@ public:
   Lexer(std::ifstream file);
   ~Lexer();
 
-  void lex();
+  std::list<Token> lex();
 
   static std::unique_ptr<Lexer> from_file(fs::path path);
 

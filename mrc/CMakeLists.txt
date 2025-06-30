@@ -15,7 +15,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(llvm-project)
 
-add_executable(mrc Main.cpp Lexer.cpp)
+add_executable(mrc Main.cpp Lexer.cpp AST.cpp)
 target_include_directories(mrc PRIVATE
   ${llvm-project_SOURCE_DIR}/llvm/include
   ${llvm-project_BINARY_DIR}/include
